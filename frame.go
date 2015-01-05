@@ -39,7 +39,9 @@ func (f *Framer) ReadFrame() (frame NFv9Frame, err error) {
 			if err = fs.read(f, fsid); err != nil {
 				return
 			}
+
 			f.session.OnReadTemplate(&fs)
+
 			frame.FlowSets = append(frame.FlowSets, fs)
 			recordsRemaining -= len(fs.Templates)
 		case fsid == 1:
@@ -50,16 +52,18 @@ func (f *Framer) ReadFrame() (frame NFv9Frame, err error) {
 			if err = fs.read(f, fsid); err != nil {
 				return
 			}
+
 			tid := int(fs.FlowSetID)
 			template, ok := f.session.templates[tid]
 			if !ok {
 				err = fmt.Errorf("Unknown template=%d", tid)
 				return
 			}
+
 			frame.FlowSets = append(frame.FlowSets, fs)
 			recordsRemaining -= len(fs.Fields) / int(template.FieldCount)
-			// TODO: parse NFv9DataFlowSet or NFv9OptionsDataFlowSet
-			// depenending on fsid in existing template map
+
+			// TODO: handle options flow set
 		default:
 			err = fmt.Errorf("Unknown FlowSet Id: %d", fsid)
 			return

@@ -10,6 +10,10 @@ func NewSession() *Session {
 	}
 }
 
+// OnReadTemplate adds new templates to the session's templates map.
+//
+// The template id is used to determine whether to store the template. If the
+// template id has been seen before, the template is not checked for any change.
 func (s *Session) OnReadTemplate(fs *NFv9TemplateFlowSet) {
 	for _, t := range fs.Templates {
 		tid := int(t.TemplateID)
