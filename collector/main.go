@@ -40,7 +40,6 @@ func main() {
 		}
 
 		framer := nfv9.NewFramer(bytes.NewBuffer(buf[:n]), s)
-
 		frame, err := framer.ReadFrame()
 
 		if err != nil {

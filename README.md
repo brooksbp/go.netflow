@@ -1,6 +1,6 @@
 # go.netflow
 
-This is a work-in-progress NetFlow v9 collector in Go.
+This is a work-in-progress NetFlow v9 (RFC 3954) collector in Go.
 
 ## Installation
 

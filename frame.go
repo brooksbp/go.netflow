@@ -6,32 +6,6 @@ import (
 	"fmt"
 )
 
-// RFC 3954: Cisco Systems NetFlow Services Export Version 9
-
-// Session contains the NetFlow collector's context.
-type Session struct {
-	templates map[int]NFv9Template
-}
-
-func NewSession() *Session {
-	return &Session{
-		templates: make(map[int]NFv9Template),
-	}
-}
-
-// OnReadTemplate adds new templates to the session's template map.
-func (s *Session) OnReadTemplate(fs *NFv9TemplateFlowSet) {
-	for _, t := range fs.Templates {
-		tid := int(t.TemplateID)
-		if _, ok := s.templates[tid]; !ok {
-			s.templates[tid] = t
-		}
-	}
-}
-
-// -----------------------------------------------------------------------------
-
-// Framer is used to parse received data into a NetFlow frame.
 type Framer struct {
 	buf     *bytes.Buffer
 	session *Session
@@ -43,16 +17,6 @@ func NewFramer(b *bytes.Buffer, s *Session) *Framer {
 		session: s,
 	}
 }
-
-// -----------------------------------------------------------------------------
-type NFv9Frame struct {
-	Header   NFv9Header
-	FlowSets []FlowSet
-}
-
-type FlowSet interface{}
-
-// -----------------------------------------------------------------------------
 
 // ReadFrame parses framer's buffer data and returns a NetFlow frame.
 func (f *Framer) ReadFrame() (frame NFv9Frame, err error) {
@@ -103,6 +67,13 @@ func (f *Framer) ReadFrame() (frame NFv9Frame, err error) {
 	}
 	return
 }
+
+type NFv9Frame struct {
+	Header   NFv9Header
+	FlowSets []FlowSet
+}
+
+type FlowSet interface{}
 
 type NFv9Header struct {
 	Version        uint16
