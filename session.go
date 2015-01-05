@@ -1,5 +1,9 @@
 package nfv9
 
+import (
+	"fmt"
+)
+
 type Session struct {
 	templates map[int]NFv9Template
 }
@@ -21,4 +25,21 @@ func (s *Session) OnReadTemplate(fs *NFv9TemplateFlowSet) {
 			s.templates[tid] = t
 		}
 	}
+}
+
+func (s *Session) OnReadData(fs *NFv9DataFlowSet, template *NFv9Template) {
+	i := 0
+	for _, field := range template.Fields {
+		ty := int(field.Type)
+		len := int(field.Length)
+
+		entry := FieldMap[ty]
+
+		fmt.Print(entry.Name, ": ")
+		entry.Print(fs.Fields[i : i+len])
+		fmt.Print(" ")
+
+		i += len
+	}
+	fmt.Println()
 }

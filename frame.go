@@ -58,6 +58,8 @@ func (f *Framer) ReadFrame() (frame NFv9Frame, err error) {
 			if !ok {
 				err = fmt.Errorf("Unknown template=%d", tid)
 				return
+			} else {
+				f.session.OnReadData(&fs, &template)
 			}
 
 			frame.FlowSets = append(frame.FlowSets, fs)
@@ -163,7 +165,7 @@ func (p *NFv9TemplateFlowSet) read(f *Framer, fsid uint16) error {
 type NFv9DataFlowSet struct {
 	FlowSetID uint16 // maps to a previously generated TemplateID.
 	Length    uint16
-	Fields    []uint16
+	Fields    []uint8
 }
 
 func (p *NFv9DataFlowSet) read(f *Framer, fsid uint16) error {
@@ -173,7 +175,7 @@ func (p *NFv9DataFlowSet) read(f *Framer, fsid uint16) error {
 	}
 	bytesRemaining := int(p.Length) - binary.Size(p.FlowSetID) - binary.Size(p.Length)
 	for bytesRemaining > 0 {
-		var field uint16
+		var field uint8
 		if err := binary.Read(f.buf, binary.BigEndian, &field); err != nil {
 			return err
 		}
