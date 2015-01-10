@@ -7,7 +7,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/brooksbp/go.netflow"
+	"github.com/brooksbp/go.netflow/pkg/nfv9"
 )
 
 var (

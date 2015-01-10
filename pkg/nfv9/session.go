@@ -35,9 +35,7 @@ func (s *Session) OnReadData(fs *NFv9DataFlowSet, template *NFv9Template) {
 
 		entry := FieldMap[ty]
 
-		fmt.Print(entry.Name, ": ")
-		entry.Print(fs.Fields[i : i+len])
-		fmt.Print(" ")
+		fmt.Print(entry.Name, ": ", entry.String(fs.Fields[i:i+len]), " ")
 
 		i += len
 	}
