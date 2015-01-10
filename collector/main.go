@@ -30,7 +30,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	s := nfv9.NewSession()
+	template_cache := nfv9.NewTemplateCache()
+
 	var buf [4096]byte
 	for {
 		n, _, err := conn.ReadFromUDP(buf[0:])
@@ -39,10 +40,33 @@ func main() {
 			os.Exit(1)
 		}
 
-		framer := nfv9.NewFramer(bytes.NewBuffer(buf[:n]), s)
+		framer := nfv9.NewFramer(bytes.NewBuffer(buf[:n]), template_cache)
 		frame, err := framer.ReadFrame()
 		if err != nil {
 			fmt.Println("Error: ", err, frame)
+		}
+
+		for _, fs := range frame.FlowSets {
+			switch flowset := fs.(type) {
+			case nfv9.NFv9TemplateFlowSet:
+				break
+			case nfv9.NFv9DataFlowSet:
+				// Print the data.
+				if template, ok := template_cache.Get(flowset.FlowSetID); ok {
+					i := 0
+					for _, field := range template.Fields {
+						ty := int(field.Type)
+						len := int(field.Length)
+						entry := nfv9.FieldMap[ty]
+						fmt.Print(entry.Name, ": ", entry.String(flowset.Fields[i:i+len]), " ")
+						i += len
+					}
+					fmt.Print("\n")
+				}
+				break
+			default:
+				fmt.Println("Unknown flowset")
+			}
 		}
 	}
 }

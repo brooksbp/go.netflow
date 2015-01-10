@@ -6,74 +6,6 @@ import (
 	"fmt"
 )
 
-type Framer struct {
-	buf     *bytes.Buffer
-	session *Session
-}
-
-func NewFramer(b *bytes.Buffer, s *Session) *Framer {
-	return &Framer{
-		buf:     b,
-		session: s,
-	}
-}
-
-// ReadFrame parses framer's buffer data and returns a NetFlow frame.
-func (f *Framer) ReadFrame() (frame NFv9Frame, err error) {
-	err = nil
-	frame = NFv9Frame{}
-
-	if err = frame.Header.read(f); err != nil {
-		return
-	}
-
-	recordsRemaining := int(frame.Header.Count)
-	for recordsRemaining > 0 {
-		var fsid uint16
-		if err = binary.Read(f.buf, binary.BigEndian, &fsid); err != nil {
-			return
-		}
-		switch {
-		case fsid == 0:
-			fs := NFv9TemplateFlowSet{}
-			if err = fs.read(f, fsid); err != nil {
-				return
-			}
-
-			f.session.OnReadTemplate(&fs)
-
-			frame.FlowSets = append(frame.FlowSets, fs)
-			recordsRemaining -= len(fs.Templates)
-		case fsid == 1:
-			err = fmt.Errorf("Unimplemented: NFv9OptionsTemplateFlowSet")
-			return
-		case fsid > 255:
-			fs := NFv9DataFlowSet{}
-			if err = fs.read(f, fsid); err != nil {
-				return
-			}
-
-			tid := int(fs.FlowSetID)
-			template, ok := f.session.templates[tid]
-			if !ok {
-				err = fmt.Errorf("Unknown template=%d", tid)
-				return
-			} else {
-				f.session.OnReadData(&fs, &template)
-			}
-
-			frame.FlowSets = append(frame.FlowSets, fs)
-			recordsRemaining -= len(fs.Fields) / int(template.FieldCount)
-
-			// TODO: handle options flow set
-		default:
-			err = fmt.Errorf("Unknown FlowSet Id: %d", fsid)
-			return
-		}
-	}
-	return
-}
-
 type NFv9Frame struct {
 	Header   NFv9Header
 	FlowSets []FlowSet
@@ -199,4 +131,72 @@ type NFv9OptionsDataFlowSet struct {
 	FlowSetID uint16 // maps to a previously generated Options TemplateID
 	Length    uint16
 	Fields    []uint16
+}
+
+type Framer struct {
+	buf            *bytes.Buffer
+	template_cache *TemplateCache
+}
+
+func NewFramer(b *bytes.Buffer, tc *TemplateCache) *Framer {
+	return &Framer{
+		buf:            b,
+		template_cache: tc,
+	}
+}
+
+// ReadFrame parses framer's buffer data and returns a NetFlow frame.
+func (f *Framer) ReadFrame() (frame NFv9Frame, err error) {
+	err = nil
+	frame = NFv9Frame{}
+
+	if err = frame.Header.read(f); err != nil {
+		return
+	}
+
+	recordsRemaining := int(frame.Header.Count)
+	for recordsRemaining > 0 {
+		var fsid uint16
+		if err = binary.Read(f.buf, binary.BigEndian, &fsid); err != nil {
+			return
+		}
+		switch {
+		case fsid == 0:
+			fs := NFv9TemplateFlowSet{}
+			if err = fs.read(f, fsid); err != nil {
+				return
+			}
+
+			// Add new templates to the TemplateCache.
+			for _, template := range fs.Templates {
+				if !f.template_cache.Exists(template.TemplateID) {
+					f.template_cache.Add(&template)
+				}
+			}
+
+			frame.FlowSets = append(frame.FlowSets, fs)
+			recordsRemaining -= len(fs.Templates)
+		case fsid == 1:
+			err = fmt.Errorf("Unimplemented: NFv9OptionsTemplateFlowSet")
+			return
+		case fsid > 255:
+			fs := NFv9DataFlowSet{}
+			if err = fs.read(f, fsid); err != nil {
+				return
+			}
+
+			template, ok := f.template_cache.Get(fs.FlowSetID)
+			if !ok {
+				err = fmt.Errorf("Cannot parse DataFlowSet. Unknown TemplateID=%d", fs.FlowSetID)
+				return
+			}
+
+			frame.FlowSets = append(frame.FlowSets, fs)
+			recordsRemaining -= len(fs.Fields) / int(template.FieldCount)
+		default:
+			err = fmt.Errorf("Unknown FlowSet Id: %d", fsid)
+			return
+		}
+	}
+	return
 }
