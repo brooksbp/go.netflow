@@ -6,55 +6,55 @@ import (
 	"fmt"
 )
 
-type NFv9Frame struct {
-	Header   NFv9Header
+type Frame struct {
+	Header   Header
 	FlowSets []FlowSet
 }
 
-type FlowSet interface{}
-
-type NFv9Header struct {
+type Header struct {
 	Version        uint16
 	Count          uint16
-	SystemUptime   uint32
+	systemUptime   uint32
 	UNIXSeconds    uint32
 	SequenceNumber uint32
 	SourceID       uint32
 }
 
-func (p *NFv9Header) read(f *Framer) error {
+type FlowSet interface{}
+
+func (p *Header) read(f *Framer) error {
 	if err := binary.Read(f.buf, binary.BigEndian, p); err != nil {
 		return err
 	}
 	return nil
 }
 
-type NFv9FieldTL struct {
+type FieldTL struct {
 	Type   uint16
 	Length uint16
 }
 
-func (p *NFv9FieldTL) read(f *Framer) error {
+func (p *FieldTL) read(f *Framer) error {
 	if err := binary.Read(f.buf, binary.BigEndian, p); err != nil {
 		return err
 	}
 	return nil
 }
 
-type NFv9Template struct {
+type Template struct {
 	TemplateID uint16 // always 0-255
 	FieldCount uint16
-	Fields     []NFv9FieldTL
+	Fields     []FieldTL
 }
 
-func (p *NFv9Template) size() int {
+func (p *Template) size() int {
 	size := binary.Size(p.TemplateID)
 	size += binary.Size(p.FieldCount)
-	size += int(p.FieldCount) * binary.Size(NFv9FieldTL{})
+	size += int(p.FieldCount) * binary.Size(FieldTL{})
 	return size
 }
 
-func (p *NFv9Template) read(f *Framer) error {
+func (p *Template) read(f *Framer) error {
 	if err := binary.Read(f.buf, binary.BigEndian, &p.TemplateID); err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func (p *NFv9Template) read(f *Framer) error {
 		return err
 	}
 	for i := 0; i < int(p.FieldCount); i++ {
-		field := NFv9FieldTL{}
+		field := FieldTL{}
 		if err := field.read(f); err != nil {
 			return err
 		}
@@ -71,20 +71,20 @@ func (p *NFv9Template) read(f *Framer) error {
 	return nil
 }
 
-type NFv9TemplateFlowSet struct {
+type TemplateFlowSet struct {
 	FlowSetID uint16 // always 0
 	Length    uint16
-	Templates []NFv9Template
+	Templates []Template
 }
 
-func (p *NFv9TemplateFlowSet) read(f *Framer, fsid uint16) error {
+func (p *TemplateFlowSet) read(f *Framer, fsid uint16) error {
 	p.FlowSetID = fsid
 	if err := binary.Read(f.buf, binary.BigEndian, &p.Length); err != nil {
 		return err
 	}
 	bytesRemaining := int(p.Length) - binary.Size(p.FlowSetID) - binary.Size(p.Length)
 	for bytesRemaining > 0 {
-		template := NFv9Template{}
+		template := Template{}
 		if err := template.read(f); err != nil {
 			return err
 		}
@@ -94,13 +94,13 @@ func (p *NFv9TemplateFlowSet) read(f *Framer, fsid uint16) error {
 	return nil
 }
 
-type NFv9DataFlowSet struct {
+type DataFlowSet struct {
 	FlowSetID uint16 // maps to a previously generated TemplateID.
 	Length    uint16
 	Fields    []uint8
 }
 
-func (p *NFv9DataFlowSet) read(f *Framer, fsid uint16) error {
+func (p *DataFlowSet) read(f *Framer, fsid uint16) error {
 	p.FlowSetID = fsid
 	if err := binary.Read(f.buf, binary.BigEndian, &p.Length); err != nil {
 		return err
@@ -117,17 +117,17 @@ func (p *NFv9DataFlowSet) read(f *Framer, fsid uint16) error {
 	return nil
 }
 
-type NFv9OptionsTemplateFlowSet struct {
+type OptionsTemplateFlowSet struct {
 	FlowSetID         uint16 // always 1
 	Length            uint16
 	TemplateID        uint16
 	OptionScopeLength uint16
 	OptionLength      uint16
-	ScopeFields       []NFv9FieldTL
-	OptionFields      []NFv9FieldTL
+	ScopeFields       []FieldTL
+	OptionFields      []FieldTL
 }
 
-type NFv9OptionsDataFlowSet struct {
+type OptionsDataFlowSet struct {
 	FlowSetID uint16 // maps to a previously generated Options TemplateID
 	Length    uint16
 	Fields    []uint16
@@ -146,9 +146,9 @@ func NewFramer(b *bytes.Buffer, tc *TemplateCache) *Framer {
 }
 
 // ReadFrame parses framer's buffer data and returns a NetFlow frame.
-func (f *Framer) ReadFrame() (frame NFv9Frame, err error) {
+func (f *Framer) ReadFrame() (frame Frame, err error) {
 	err = nil
-	frame = NFv9Frame{}
+	frame = Frame{}
 
 	if err = frame.Header.read(f); err != nil {
 		return
@@ -162,7 +162,7 @@ func (f *Framer) ReadFrame() (frame NFv9Frame, err error) {
 		}
 		switch {
 		case fsid == 0:
-			fs := NFv9TemplateFlowSet{}
+			fs := TemplateFlowSet{}
 			if err = fs.read(f, fsid); err != nil {
 				return
 			}
@@ -177,10 +177,10 @@ func (f *Framer) ReadFrame() (frame NFv9Frame, err error) {
 			frame.FlowSets = append(frame.FlowSets, fs)
 			recordsRemaining -= len(fs.Templates)
 		case fsid == 1:
-			err = fmt.Errorf("Unimplemented: NFv9OptionsTemplateFlowSet")
+			err = fmt.Errorf("Unimplemented: OptionsTemplateFlowSet")
 			return
 		case fsid > 255:
-			fs := NFv9DataFlowSet{}
+			fs := DataFlowSet{}
 			if err = fs.read(f, fsid); err != nil {
 				return
 			}

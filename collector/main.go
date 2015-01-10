@@ -48,9 +48,9 @@ func main() {
 
 		for _, fs := range frame.FlowSets {
 			switch flowset := fs.(type) {
-			case nfv9.NFv9TemplateFlowSet:
+			case nfv9.TemplateFlowSet:
 				break
-			case nfv9.NFv9DataFlowSet:
+			case nfv9.DataFlowSet:
 				// Print the data.
 				if template, ok := template_cache.Get(flowset.FlowSetID); ok {
 					i := 0
