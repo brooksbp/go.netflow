@@ -169,6 +169,7 @@ func (f *Framer) ReadFrame() (frame Frame, err error) {
 
 			// Add new templates to the TemplateCache.
 			for _, template := range fs.Templates {
+				template := template
 				if !f.template_cache.Exists(template.TemplateID) {
 					f.template_cache.Add(&template)
 				}
