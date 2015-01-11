@@ -1,7 +1,11 @@
 package nfv9
 
 import (
+	"bytes"
+	"encoding/binary"
 	"strconv"
+
+	"github.com/brooksbp/go.netflow/pkg/net2"
 )
 
 type FieldTypeEntry struct {
@@ -15,7 +19,7 @@ var FieldMap = map[int]FieldTypeEntry{
 	1:   FieldTypeEntry{"IN_BYTES", -1, StringDefault, "Incoming counter with length N x 8 bits for number of bytes associated with an IP Flow"},
 	2:   FieldTypeEntry{"IN_PKTS", -1, StringDefault, "Incoming counter with length N x 8 bits for the number of packets associated with an IP Flow"},
 	3:   FieldTypeEntry{"FLOWS", -1, StringDefault, "Number of flows that were aggregated; default for N is 4"},
-	4:   FieldTypeEntry{"PROTOCOL", 1, StringDefault, "IP protocol byte"},
+	4:   FieldTypeEntry{"PROTOCOL", 1, StringIPProtocol, "IP protocol byte"},
 	5:   FieldTypeEntry{"SRC_TOS", 1, StringDefault, "Type of Service byte setting when entering incoming interface"},
 	6:   FieldTypeEntry{"TCP_FLAGS", 1, StringDefault, "Cumulative of all the TCP flags seen for this flow"},
 	7:   FieldTypeEntry{"L4_SRC_PORT", 2, StringDefault, "TCP/UDP source port number i.e.: FTP, Telnet, or equivalent"},
@@ -116,10 +120,28 @@ var FieldMap = map[int]FieldTypeEntry{
 	102: FieldTypeEntry{"layer2packetSectionData", -1, StringDefault, ""},
 }
 
-func StringDefault(bytes []uint8) string {
+func StringDefault(b []uint8) string {
+	switch len(b) {
+	case 1:
+		return strconv.Itoa(int(b[0]))
+	case 2:
+		var n uint16
+		binary.Read(bytes.NewBuffer(b), binary.BigEndian, &n)
+		return strconv.Itoa(int(n))
+	case 4:
+		var n uint32
+		binary.Read(bytes.NewBuffer(b), binary.BigEndian, &n)
+		return strconv.Itoa(int(n))
+	case 8:
+		var n uint64
+		binary.Read(bytes.NewBuffer(b), binary.BigEndian, &n)
+		return strconv.Itoa(int(n))
+	}
+
+	// Fall back to generic approach.
 	s := ""
-	for _, b := range bytes {
-		s += strconv.Itoa(int(b)) + " "
+	for _, n := range b {
+		s += strconv.Itoa(int(n)) + " "
 	}
 	return s
 }
@@ -142,4 +164,11 @@ func StringMAC(bytes []uint8) string {
 		buf = append(buf, hexDigit[b&0xF])
 	}
 	return string(buf)
+}
+
+func StringIPProtocol(bytes []uint8) string {
+	if entry, ok := net2.IPProtocolMap[int(bytes[0])]; ok {
+		return entry.Keyword
+	}
+	return ""
 }
