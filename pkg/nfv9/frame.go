@@ -14,7 +14,7 @@ type Frame struct {
 type Header struct {
 	Version        uint16
 	Count          uint16
-	systemUptime   uint32
+	SystemUptime   uint32
 	UNIXSeconds    uint32
 	SequenceNumber uint32
 	SourceID       uint32
