@@ -4,17 +4,24 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"strconv"
 )
 
+// NetFlow v9 export packet.
 type Frame struct {
 	Header   Header
 	FlowSets []FlowSet
 }
 
 type Header struct {
-	Version        uint16
-	Count          uint16
-	SystemUptime   uint32
+	// The version of NetFlow records exported in this packet.
+	Version uint16
+	// Number of FlowSet records (both template and data) contained within
+	// this packet.
+	Count uint16
+	// Time in milliseconds since this device was first booted.
+	SystemUptime uint32
+	// Seconds since 0000 Coordinated Universal Time (UTC) 1970
 	UNIXSeconds    uint32
 	SequenceNumber uint32
 	SourceID       uint32
@@ -27,6 +34,16 @@ func (p *Header) read(f *Framer) error {
 		return err
 	}
 	return nil
+}
+
+func (p *Header) String() string {
+	return "Ver=" + strconv.Itoa(int(p.Version)) +
+		" Count=" + strconv.Itoa(int(p.Count)) +
+		" SystemUptime=" + strconv.Itoa(int(p.SystemUptime)) +
+		" UNIXSeconds=" + strconv.Itoa(int(p.UNIXSeconds)) +
+		" SeqNo=" + strconv.Itoa(int(p.SequenceNumber)) +
+		" SourceID=" + strconv.Itoa(int(p.SourceID)) +
+		" : "
 }
 
 type FieldTL struct {
@@ -54,6 +71,16 @@ func (p *Template) size() int {
 	return size
 }
 
+// fieldsSize returns the total number of bytes of data specified by the
+// template.
+func (p *Template) fieldsSize() int {
+	var n int
+	for _, field := range p.Fields {
+		n += int(field.Length)
+	}
+	return n
+}
+
 func (p *Template) read(f *Framer) error {
 	if err := binary.Read(f.buf, binary.BigEndian, &p.TemplateID); err != nil {
 		return err
@@ -77,11 +104,10 @@ type TemplateFlowSet struct {
 	Templates []Template
 }
 
-func (p *TemplateFlowSet) read(f *Framer, fsid uint16) error {
-	p.FlowSetID = fsid
-	if err := binary.Read(f.buf, binary.BigEndian, &p.Length); err != nil {
-		return err
-	}
+func (p *TemplateFlowSet) read(f *Framer, fsId uint16, length uint16) error {
+	p.FlowSetID = fsId
+	p.Length = length
+
 	bytesRemaining := int(p.Length) - binary.Size(p.FlowSetID) - binary.Size(p.Length)
 	for bytesRemaining > 0 {
 		template := Template{}
@@ -94,43 +120,56 @@ func (p *TemplateFlowSet) read(f *Framer, fsid uint16) error {
 	return nil
 }
 
+type DataRecord struct {
+	Fields []uint8
+}
+
 type DataFlowSet struct {
-	FlowSetID uint16 // maps to a previously generated TemplateID.
-	Length    uint16
-	Fields    []uint8
+	// FlowSetID maps to a (previously received) template ID.
+	// Note: parsing does not validate this!
+	FlowSetID uint16
+	// Length in bytes of this DataFlowSet.
+	Length uint16
+	// N records x N fields, as defined by the template.
+	Records []DataRecord
 }
 
-func (p *DataFlowSet) read(f *Framer, fsid uint16) error {
-	p.FlowSetID = fsid
-	if err := binary.Read(f.buf, binary.BigEndian, &p.Length); err != nil {
-		return err
-	}
+func (p *DataFlowSet) read(f *Framer, fsId uint16, length uint16, template *Template) (int, error) {
+	p.FlowSetID = fsId
+	p.Length = length
+
 	bytesRemaining := int(p.Length) - binary.Size(p.FlowSetID) - binary.Size(p.Length)
-	for bytesRemaining > 0 {
-		var field uint8
-		if err := binary.Read(f.buf, binary.BigEndian, &field); err != nil {
-			return err
+
+	recordSize := template.fieldsSize()
+
+	count := 0
+	for bytesRemaining >= recordSize {
+		// Eat a record
+		dr := DataRecord{}
+
+		n := recordSize
+		for n > 0 {
+			// TODO: just copy bytes into dr.Fields?
+			var field uint8
+			if err := binary.Read(f.buf, binary.BigEndian, &field); err != nil {
+				return 0, err
+			}
+			dr.Fields = append(dr.Fields, field)
+			n -= 1
 		}
-		p.Fields = append(p.Fields, field)
-		bytesRemaining -= binary.Size(field)
+		p.Records = append(p.Records, dr)
+		bytesRemaining -= recordSize
+		count += 1
 	}
-	return nil
-}
-
-type OptionsTemplateFlowSet struct {
-	FlowSetID         uint16 // always 1
-	Length            uint16
-	TemplateID        uint16
-	OptionScopeLength uint16
-	OptionLength      uint16
-	ScopeFields       []FieldTL
-	OptionFields      []FieldTL
-}
-
-type OptionsDataFlowSet struct {
-	FlowSetID uint16 // maps to a previously generated Options TemplateID
-	Length    uint16
-	Fields    []uint16
+	// Eat padding.
+	for bytesRemaining > 0 {
+		var padding uint8
+		if err := binary.Read(f.buf, binary.BigEndian, &padding); err != nil {
+			return 0, err
+		}
+		bytesRemaining -= binary.Size(padding)
+	}
+	return count, nil
 }
 
 type Framer struct {
@@ -150,53 +189,57 @@ func (f *Framer) ReadFrame() (frame Frame, err error) {
 	err = nil
 	frame = Frame{}
 
+	// Read Header
 	if err = frame.Header.read(f); err != nil {
 		return
 	}
 
-	recordsRemaining := int(frame.Header.Count)
-	for recordsRemaining > 0 {
-		var fsid uint16
-		if err = binary.Read(f.buf, binary.BigEndian, &fsid); err != nil {
+	// Read FlowSets
+	count := int(frame.Header.Count)
+	for count > 0 && f.buf.Len() > 0 {
+		// Parse a FlowSet record.
+		var fsId uint16
+		var length uint16
+		if err = binary.Read(f.buf, binary.BigEndian, &fsId); err != nil {
 			return
 		}
+		if err = binary.Read(f.buf, binary.BigEndian, &length); err != nil {
+			return
+		}
+
 		switch {
-		case fsid == 0:
-			fs := TemplateFlowSet{}
-			if err = fs.read(f, fsid); err != nil {
+		case fsId == 0:
+			tfs := TemplateFlowSet{}
+			if err = tfs.read(f, fsId, length); err != nil {
 				return
 			}
 
 			// Add new templates to the TemplateCache.
-			for _, template := range fs.Templates {
+			for _, template := range tfs.Templates {
 				template := template
 				if !f.template_cache.Exists(template.TemplateID) {
 					f.template_cache.Add(&template)
 				}
 			}
 
-			frame.FlowSets = append(frame.FlowSets, fs)
-			recordsRemaining -= len(fs.Templates)
-		case fsid == 1:
-			err = fmt.Errorf("Unimplemented: OptionsTemplateFlowSet")
-			return
-		case fsid > 255:
-			fs := DataFlowSet{}
-			if err = fs.read(f, fsid); err != nil {
-				return
-			}
-
-			template, ok := f.template_cache.Get(fs.FlowSetID)
+			frame.FlowSets = append(frame.FlowSets, tfs)
+			count -= 1
+			break
+		case fsId > 255:
+			template, ok := f.template_cache.Get(fsId)
 			if !ok {
-				err = fmt.Errorf("Cannot parse DataFlowSet. Unknown TemplateID=%d", fs.FlowSetID)
+				err = fmt.Errorf("Cannot parse DataFlowSet: unknown TemplateID=%d", fsId)
 				return
 			}
-
-			frame.FlowSets = append(frame.FlowSets, fs)
-			recordsRemaining -= len(fs.Fields) / int(template.FieldCount)
-		default:
-			err = fmt.Errorf("Unknown FlowSet Id: %d", fsid)
-			return
+			dfs := DataFlowSet{}
+			var cnt int
+			cnt, err = dfs.read(f, fsId, length, template)
+			if err != nil {
+				return
+			}
+			frame.FlowSets = append(frame.FlowSets, dfs)
+			count -= cnt
+			break
 		}
 	}
 	return

@@ -45,7 +45,7 @@ func main() {
 		if err != nil {
 			fmt.Println("Error: ", err, frame)
 		}
-
+		fmt.Println(frame.Header.String())
 		for _, fs := range frame.FlowSets {
 			switch flowset := fs.(type) {
 			case nfv9.TemplateFlowSet:
@@ -53,15 +53,20 @@ func main() {
 			case nfv9.DataFlowSet:
 				// Print the data.
 				if template, ok := template_cache.Get(flowset.FlowSetID); ok {
-					i := 0
-					for _, field := range template.Fields {
-						ty := int(field.Type)
-						len := int(field.Length)
-						entry := nfv9.FieldMap[ty]
-						fmt.Print(entry.Name, ": ", entry.String(flowset.Fields[i:i+len]), " ")
-						i += len
+					for _, record := range flowset.Records {
+						var i int
+						for _, field := range template.Fields {
+							ty := int(field.Type)
+							len := int(field.Length)
+
+							entry := nfv9.FieldMap[ty]
+
+							fmt.Print(entry.Name, ": ", entry.String(record.Fields[i:i+len]), " ")
+
+							i += len
+						}
+						fmt.Print("\n")
 					}
-					fmt.Print("\n")
 				}
 				break
 			default:
