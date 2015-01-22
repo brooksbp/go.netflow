@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"time"
 
+	"github.com/brooksbp/go.netflow/pkg/net2"
 	"github.com/brooksbp/go.netflow/pkg/nfv9"
 )
 
@@ -54,12 +56,16 @@ func PrintDataFlowSet(dfs *nfv9.DataFlowSet, tc *nfv9.TemplateCache) {
 	}
 	for _, record := range dfs.Records {
 		var i int
+		var protocol string
 		for _, field := range template.Fields {
 			ty := int(field.Type)
 			len := int(field.Length)
 
 			entry := nfv9.FieldMap[ty]
-			dataStr := entry.String(record.Fields[i : i+len])
+
+			data := record.Fields[i : i+len]
+			dataStr := entry.String(data)
+
 			i += len
 
 			fmt.Print(entry.Name, ": ")
@@ -73,6 +79,24 @@ func PrintDataFlowSet(dfs *nfv9.DataFlowSet, tc *nfv9.TemplateCache) {
 					fmt.Print(*names)
 					fmt.Print(" (", dataStr, ")")
 				} else {
+					fmt.Print(dataStr)
+				}
+			case "PROTOCOL":
+				protocol = dataStr
+				fmt.Print(dataStr)
+			case "L4_SRC_PORT":
+				fallthrough
+			case "L4_DST_PORT":
+				mapped := false
+				if port, err := strconv.Atoi(dataStr); err == nil {
+					if portMapEntry, ok := net2.TCPUDPPortMap[port]; ok {
+						if proto, ok := portMapEntry[protocol]; ok {
+							fmt.Print(proto)
+							mapped = true
+						}
+					}
+				}
+				if !mapped {
 					fmt.Print(dataStr)
 				}
 			default:

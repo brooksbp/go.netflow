@@ -150,3 +150,87 @@ var IPProtocolMap = map[int]IPProtocol{
 	141: IPProtocol{"WESP", "Wrapped Encapsulating Security Payload"},
 	142: IPProtocol{"ROHC", "Robust Header Compression"},
 }
+
+// TODO: fill..
+var TCPUDPPortMap = map[int]map[string]string{
+	0: {
+		"TCP": "Programming technique for specifying system-allocated (dynamic) ports",
+		"UDP": "Reserved",
+	},
+	1: {
+		"TCP": "TCPMUX",
+		"UDP": "TCPMUX",
+	},
+	7: {
+		"TCP": "Echo Protocol",
+		"UDP": "Echo Protocol",
+	},
+	20: {
+		"TCP": "FTP data transfer",
+		"UDP": "FTP data transfer",
+	},
+	21: {
+		"TCP": "FTP control",
+	},
+	22: {
+		"TCP": "SSH/SCP/SFTP",
+		"UDP": "SSH/SCP/SFTP",
+	},
+	23: {
+		"TCP": "Telnet",
+		"UDP": "Telnet",
+	},
+	25: {
+		"TCP": "SMTP",
+	},
+	42: {
+		"TCP": "ARPA Host Name Server Protocol",
+		"UDP": "ARPA Host Name Server Protocol",
+	},
+	43: {
+		"TCP": "WHOIS",
+	},
+	53: {
+		"TCP": "DNS",
+		"UDP": "DNS",
+	},
+	69: {
+		"UDP": "TFTP",
+	},
+	80: {
+		"TCP": "HTTP",
+		"UDP": "QUIC",
+	},
+	123: {
+		"TCP": "NTP",
+		"UDP": "NTP",
+	},
+	143: {
+		"TCP": "IMAP",
+	},
+	161: {
+		"UDP": "SNMP",
+	},
+	177: {
+		"TCP": "XDMCP",
+		"UDP": "XDMCP",
+	},
+	179: {
+		"TCP": "BGP",
+	},
+	194: {
+		"TCP": "IRC",
+		"UDP": "IRC",
+	},
+	443: {
+		"TCP": "HTTPS",
+		"UDP": "QUIC",
+	},
+	554: {
+		"TCP": "RTSP",
+		"UDP": "RTSP",
+	},
+	944: {
+		"UDP": "NFS",
+	},
+}
