@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 
 	"github.com/brooksbp/go.netflow/pkg/nfv9"
 )
@@ -13,6 +14,38 @@ import (
 var (
 	flagListen = flag.String("listen", ":9999", "host:port to listen on.")
 )
+
+type LookupAddrCacheEntry struct {
+	names []string
+	ts    time.Time
+}
+type LookupAddrCache struct {
+	addrs map[string]*LookupAddrCacheEntry
+}
+
+const LookupAddrCacheTime = 5 * time.Minute
+
+func (lac *LookupAddrCache) Get(ip string) (*[]string, bool) {
+	if lac.addrs == nil {
+		lac.addrs = make(map[string]*LookupAddrCacheEntry)
+	}
+	now := time.Now()
+	entry, ok := lac.addrs[ip]
+	if !ok || (ok && (now.After(entry.ts.Add(LookupAddrCacheTime)))) {
+		name, err := net.LookupAddr(ip)
+		if err != nil {
+			return nil, false
+		}
+		lac.addrs[ip] = &LookupAddrCacheEntry{
+			names: name,
+			ts:    now,
+		}
+		return &lac.addrs[ip].names, true
+	}
+	return &entry.names, true
+}
+
+var lookup_addr_cache LookupAddrCache
 
 func PrintDataFlowSet(dfs *nfv9.DataFlowSet, tc *nfv9.TemplateCache) {
 	template, ok := tc.Get(dfs.FlowSetID)
@@ -26,12 +59,28 @@ func PrintDataFlowSet(dfs *nfv9.DataFlowSet, tc *nfv9.TemplateCache) {
 			len := int(field.Length)
 
 			entry := nfv9.FieldMap[ty]
-
-			fmt.Print(entry.Name, ": ", entry.String(record.Fields[i:i+len]), " ")
-
+			dataStr := entry.String(record.Fields[i : i+len])
 			i += len
+
+			fmt.Print(entry.Name, ": ")
+			switch entry.Name {
+			case "IPV4_SRC_ADDR":
+				fallthrough
+			case "IPV4_DST_ADDR":
+				fallthrough
+			case "IPV4_NEXT_HOP":
+				if names, ok := lookup_addr_cache.Get(dataStr); ok {
+					fmt.Print(*names)
+					fmt.Print(" (", dataStr, ")")
+				} else {
+					fmt.Print(dataStr)
+				}
+			default:
+				fmt.Print(dataStr)
+			}
+			fmt.Print(" ")
 		}
-		fmt.Println()
+		fmt.Print("\n\n")
 	}
 }
 
