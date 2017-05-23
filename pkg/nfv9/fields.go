@@ -5,7 +5,9 @@ import (
 	"encoding/binary"
 	"strconv"
 
-	"github.com/brooksbp/go.netflow/pkg/net2"
+	"fmt"
+
+	"github.com/ipartner/go.netflow/pkg/net2"
 )
 
 type FieldTypeEntry struct {
@@ -138,6 +140,7 @@ func StringDefault(b []uint8) string {
 		return strconv.Itoa(int(n))
 	case 8:
 		var n uint64
+		fmt.Printf("%+v", b)
 		binary.Read(bytes.NewBuffer(b), binary.BigEndian, &n)
 		return strconv.Itoa(int(n))
 	}
