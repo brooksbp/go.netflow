@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"strconv"
 
-	"github.com/brooksbp/go.netflow/pkg/net2"
+	"github.com/ipartner/go.netflow/pkg/net2"
 )
 
 type FieldTypeEntry struct {
@@ -118,6 +118,10 @@ var FieldMap = map[int]FieldTypeEntry{
 	100: FieldTypeEntry{"layer2packetSectionOffset", -1, StringDefault, ""},
 	101: FieldTypeEntry{"layer2packetSectionSize", -1, StringDefault, ""},
 	102: FieldTypeEntry{"layer2packetSectionData", -1, StringDefault, ""},
+	298: FieldTypeEntry{"initiatorPackets", -1, StringDefault, ""},
+	299: FieldTypeEntry{"responderPackets", -1, StringDefault, ""},
+	231: FieldTypeEntry{"initiatorOctets", -1, StringDefault, ""},
+	232: FieldTypeEntry{"responderOctets", -1, StringDefault, ""},
 }
 
 func StringDefault(b []uint8) string {
